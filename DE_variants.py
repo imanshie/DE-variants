@@ -2,9 +2,8 @@ import numpy as np
 import random
 import math
 from copy import deepcopy
-from Beamforming import Problem
-import pandas as pd
-import Output
+from Beamforming import Problem, Report
+import InputOutput
 
 
 class DE:
@@ -343,7 +342,7 @@ class JADEWO(Adaptive):
             if self.pop_fitness[self.ind_trgt_vec] != self.trial_fitness:
                 self.SF.append(self.F)
                 self.SCR.append(self.CR)
-            self.set_target_to_trial()
+            self.set_trial_to_target()
 
     def feedback(self):
         self.MF = (1 - self.C) * self.MF + self.C * Mean.lehmer(self.SF)
@@ -548,7 +547,7 @@ class LSHADE(Adaptive):
                 del self.pop_constraints[index]
                 del self.pop_fitness[index]
                 del self.pop_feasibility[index]
-                del self.pop_constraints_sum_differences[index]
+                del self.pop_constraints_violation_num[index]
             self.PN = PN_new
             self.AN = self.PN
 
@@ -601,7 +600,7 @@ class Rand:
 
 
 def DE_initialization():
-    DE.static(D=Problem.D, BOUNDS=Problem.BOUNDS, GENE_NO=Problem.GENE_NUM, MAX_NFE=Problem.D * 10000, PN_INIT=Problem.D * 18, PN_MIN=4)
+    DE.static(D=Problem.D, BOUNDS=Problem.BOUNDS, GENE_NO=Problem.GENE_NUM, MAX_NFE=Problem.D * 36, PN_INIT=Problem.D * 18, PN_MIN=4)
     Tuning.static(F=0.5, CR=0.9)
     objs = [
         LSHADE(MF=[0.5] * 6, MCR=[0.5] * 6, H=6, AN=DE.PN_INIT, C=0.1, K=0, pbest=0.11),
@@ -617,9 +616,9 @@ def DE_initialization():
 
 
 def DE_steps(obj):
-    generation_num = []
-    fitness_value = []
+    graphic_info = []
     obj.sorted_pop_indexes = obj.get_sorted_pop_indexes()
+
     while obj.NFE <= DE.MAX_NFE:
         for i in range(obj.PN):
             obj.ind_trgt_vec = i
@@ -629,22 +628,17 @@ def DE_steps(obj):
             obj.selection()
             obj.NFE += 1
             if obj.NFE % (obj.MAX_NFE / 20) == 0:
-                generation_num.append([obj.pop_fitness[obj.best_vec_index], obj.NFE / DE.D])
-                fitness_value.append([obj.pop_fitness[obj.best_vec_index], obj.NFE / DE.D])
+                obj.best_vec_index = obj.sorted_pop_indexes[0]
+                graphic_info.append([obj.NFE / DE.D, obj.pop_fitness[obj.best_vec_index]])
         obj.sorted_pop_indexes = obj.get_sorted_pop_indexes()
         obj.feedback()
+
     obj.best_vec_index = obj.sorted_pop_indexes[0]
-
-    data = {}
-    for ind, gene in range(DE.GENE_NO):
-        data[f'gene_{ind}'] = [vec[ind] for vec in obj.pop]
-    data['fitness'] = obj.pop_fitness[obj.best_vec_index]
-    data['fisibility'] = obj.pop_feasibility[obj.best_vec_index]
-    data['generation_num'] = generation_num
-    data['fitness_value'] = fitness_value
-
-    df = pd.DataFrame(data)
-    df.to_csv()
+    print(f'Model_{Problem.MODEL_NUM} | {obj.ALGO_NAME}: Feasibility = {obj.pop_feasibility[obj.best_vec_index]} | Fitness = {obj.pop_fitness[obj.best_vec_index]}')
+    data = {
+        'individual': obj.pop[obj.best_vec_index],
+        'graphic_info': graphic_info
+    }
     return data
 
 
@@ -652,4 +646,9 @@ if __name__ == '__main__':
     DE_objects = DE_initialization()
 
     for obj in DE_objects:
-        DE_steps(obj)
+        data = DE_steps(obj)
+        Report.solution(data['individual'])
+        file_name = Problem.get_file_name()
+        path = 'results/' + obj.ALGO_FOLDER_NAME + '/model_' + str(Problem.MODEL_NUM)
+        InputOutput.to_csv(path=path, file_name='individual_' + file_name, data=data['individual'])
+        InputOutput.to_csv(path=path, file_name='graphic_info_' + file_name, data=data['graphic_info'])
