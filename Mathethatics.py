@@ -46,5 +46,6 @@ class Rand:
         return low + (uniform(0, 1) * (high - low))
 
 
+
 def distance(a, b):
     return sqrt(pow((a['x'] - b['x']), 2) + pow((a['y'] - b['y']), 2))
